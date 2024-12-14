@@ -2,7 +2,7 @@
 name = "lsp-client"
 version = "0.1.0"
 authors = ["Colin Rofls <colin@cmyr.net>"]
-edition = "2015"
+edition = "2021"
 
 [dependencies]
 serde_json = "0.9"

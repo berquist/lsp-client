@@ -30,7 +30,7 @@ use jsonrpc_lite::JsonRPC;
 use serde_json;
 use serde_json::value::Value;
 
-use parsing;
+use crate::parsing;
 
 // this to get around some type system pain related to callbacks. See:
 // https://doc.rust-lang.org/beta/book/trait-objects.html,

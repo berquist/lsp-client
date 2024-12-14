@@ -22,10 +22,8 @@
 
 //! Handles parsing of Language Server Protocol messages from a stream.
 
-use std;
 use std::io::{self, BufRead};
 
-use serde_json;
 use serde_json::value::Value;
 
 macro_rules! print_err {
