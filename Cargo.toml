@@ -6,4 +6,4 @@ edition = "2021"
 
 [dependencies]
 serde_json = "0.9"
-jsonrpc-lite = "0.3.0"
+jsonrpc-lite = "0.4"

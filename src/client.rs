@@ -178,7 +178,7 @@ impl<W: Write> LanguageServerRef<W> {
                     print_err!("received error: {:?}", obj);
                 }
             }
-            JsonRPC::ErrorRequst(err) => print_err!("JSON-RPC error {:?}", err),
+            JsonRPC::ErrorRequest(err) => print_err!("JSON-RPC error {:?}", err),
         };
     }
 
