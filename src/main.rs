@@ -24,8 +24,8 @@
 extern crate serde_json;
 extern crate lsp_client;
 
-use std::process::{Command, Stdio, Child};
 use lsp_client::start_language_server;
+use std::process::{Child, Command, Stdio};
 
 fn main() {
     println!("starting main read loop");
@@ -47,18 +47,17 @@ fn main() {
     lang_server.send_request("initialize", &init, |result| {
         println!("received response {:?}", result);
     });
-    child.wait();
+    let _ = child.wait();
 }
-
 
 fn prepare_command() -> Child {
     use std::env;
     let rls_root = env::var("RLS_ROOT").expect("$RLS_ROOT must be set");
-        Command::new("cargo")
-            .current_dir(rls_root)
-            .args(&["run", "--release"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .expect("failed to start rls")
+    Command::new("cargo")
+        .current_dir(rls_root)
+        .args(["run", "--release"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("failed to start rls")
 }

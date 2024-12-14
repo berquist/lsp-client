@@ -41,6 +41,7 @@ macro_rules! print_err {
     )
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 /// An Error type encapsulating the various failure possibilites of the parsing process.
 pub enum ParseError {
@@ -94,22 +95,23 @@ pub fn read_message<B: BufRead>(reader: &mut B) -> Result<Value, ParseError> {
     let mut buffer = String::new();
     let mut content_length: Option<usize> = None;
 
-    // read in headers. 
+    // read in headers.
     loop {
-            buffer.clear();
-            reader.read_line(&mut buffer)?;
-            match &buffer {
-                s if s.trim().len() == 0 => { break }, // empty line is end of headers
-                s => {
-                    match parse_header(s)? {
-                        LspHeader::ContentLength(len) => content_length = Some(len),
-                        LspHeader::ContentType => (), // utf-8 only currently allowed value
-                    };
-                }
-            };
-        }
-    
-    let content_length = content_length.ok_or(format!("missing content-length header: {}", buffer))?;
+        buffer.clear();
+        reader.read_line(&mut buffer)?;
+        match &buffer {
+            s if s.trim().is_empty() => break, // empty line is end of headers
+            s => {
+                match parse_header(s)? {
+                    LspHeader::ContentLength(len) => content_length = Some(len),
+                    LspHeader::ContentType => (), // utf-8 only currently allowed value
+                };
+            }
+        };
+    }
+
+    let content_length =
+        content_length.ok_or(format!("missing content-length header: {}", buffer))?;
     // message body isn't newline terminated, so we read content_length bytes
     let mut body_buffer = vec![0; content_length];
     reader.read_exact(&mut body_buffer)?;
@@ -117,16 +119,18 @@ pub fn read_message<B: BufRead>(reader: &mut B) -> Result<Value, ParseError> {
     Ok(serde_json::from_str::<Value>(&body)?)
 }
 
-const HEADER_CONTENT_LENGTH: &'static str = "content-length";
-const HEADER_CONTENT_TYPE: &'static str = "content-type";
+const HEADER_CONTENT_LENGTH: &str = "content-length";
+const HEADER_CONTENT_TYPE: &str = "content-type";
 
 /// Given a header string, attempts to extract and validate the name and value parts.
 fn parse_header(s: &str) -> Result<LspHeader, ParseError> {
     let split: Vec<String> = s.split(": ").map(|s| s.trim().to_lowercase()).collect();
-    if split.len() != 2 { return Err(ParseError::Unknown(format!("malformed header: {}", s))) }
+    if split.len() != 2 {
+        return Err(ParseError::Unknown(format!("malformed header: {}", s)));
+    }
     match split[0].as_ref() {
         HEADER_CONTENT_TYPE => Ok(LspHeader::ContentType),
-        HEADER_CONTENT_LENGTH => Ok(LspHeader::ContentLength(usize::from_str_radix(&split[1], 10)?)),
+        HEADER_CONTENT_LENGTH => Ok(LspHeader::ContentLength(split[1].parse()?)),
         _ => Err(ParseError::Unknown(format!("Unknown header: {}", s))),
     }
 }
@@ -135,18 +139,23 @@ fn parse_header(s: &str) -> Result<LspHeader, ParseError> {
 mod tests {
     use super::*;
     use std::io::BufReader;
-    
+
     #[test]
     fn test_parse_header() {
         let header = "Content-Length: 132";
-        assert_eq!(parse_header(header).ok(), Some((LspHeader::ContentLength(132))));
+        assert_eq!(
+            parse_header(header).ok(),
+            Some(LspHeader::ContentLength(132))
+        );
     }
 
     #[test]
     fn test_parse_message() {
-        let inps = vec!("Content-Length: 18\n\r\n\r{\"name\": \"value\"}", 
-                        "Content-length: 18\n\r\n\r{\"name\": \"value\"}", 
-                        "Content-Length: 18\n\rContent-Type: utf-8\n\r\n\r{\"name\": \"value\"}");
+        let inps = vec![
+            "Content-Length: 18\n\r\n\r{\"name\": \"value\"}",
+            "Content-length: 18\n\r\n\r{\"name\": \"value\"}",
+            "Content-Length: 18\n\rContent-Type: utf-8\n\r\n\r{\"name\": \"value\"}",
+        ];
         for inp in inps {
             let mut reader = BufReader::new(inp.as_bytes());
             let result = match read_message(&mut reader) {
