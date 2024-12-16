@@ -26,7 +26,7 @@ use std::process::{Child, ChildStdin};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use jsonrpc_lite::JsonRPC;
+use jsonrpc_lite::JsonRpc as JsonRPC;
 use serde_json;
 use serde_json::value::Value;
 
@@ -67,6 +67,7 @@ fn prepare_lsp_json(msg: &Value) -> Result<String, serde_json::error::Error> {
     ))
 }
 
+#[allow(dead_code)]
 impl<W: Write> LanguageServer<W> {
     fn write(&mut self, msg: &str) {
         self.peer
@@ -126,6 +127,7 @@ impl<W: Write> LanguageServer<W> {
 pub struct LanguageServerRef<W: Write>(Arc<Mutex<LanguageServer<W>>>);
 
 //FIXME: this is hacky, and prevents good error propogation,
+#[allow(dead_code)]
 fn number_from_id(id: Option<&Value>) -> usize {
     let id = id.expect("response missing id field");
     let id = match id {
@@ -156,30 +158,36 @@ impl<W: Write> LanguageServerRef<W> {
 
     //TODO: real logging (with slog?)
     fn handle_msg(&self, val: &Value) {
-        match JsonRPC::parse_object(val) {
+        // TODO avoid what looks like a round trip
+        let parsed = val.to_string();
+        let mut parsed = JsonRPC::parse(&parsed).expect("problem creating JsonRpc instance");
+        match parsed {
             JsonRPC::Request(obj) => print_err!("client received unexpected request: {:?}", obj),
             JsonRPC::Notification(obj) => println!("recv notification: {:?}", obj),
             JsonRPC::Success(ref mut obj) => {
-                let mut inner = self.0.lock().unwrap();
-                let obj = obj.as_object_mut().unwrap();
-                let id = number_from_id(obj.get("id"));
-                inner.handle_response(
-                    id,
-                    obj.remove("result")
-                        .expect("response missing 'result' field"),
-                );
+                println!("received success: {:?}", obj);
+                // TODO
+                // let mut inner = self.0.lock().unwrap();
+                // let obj = obj.as_object_mut().unwrap();
+                // let id = number_from_id(obj.get("id"));
+                // inner.handle_response(
+                //     id,
+                //     obj.remove("result")
+                //         .expect("response missing 'result' field"),
+                // );
             }
             JsonRPC::Error(ref mut obj) => {
-                if obj.get("id").expect("error missing id field").is_null() {
-                    let mut inner = self.0.lock().unwrap();
-                    let obj = obj.as_object_mut().unwrap();
-                    inner.handle_error(number_from_id(obj.get("id")), obj.remove("error").unwrap());
-                } else {
-                    print_err!("received error: {:?}", obj);
-                }
+                print_err!("received error: {:?}", obj);
+                // TODO
+                // if obj.get("id").expect("error missing id field").is_null() {
+                //     let mut inner = self.0.lock().unwrap();
+                //     let obj = obj.as_object_mut().unwrap();
+                //     inner.handle_error(number_from_id(obj.get("id")), obj.remove("error").unwrap());
+                // } else {
+                //     print_err!("received error: {:?}", obj);
+                // }
             }
-            JsonRPC::ErrorRequest(err) => print_err!("JSON-RPC error {:?}", err),
-        };
+        }
     }
 
     /// Sends a JSON-RPC request message with the provided method and parameters.
