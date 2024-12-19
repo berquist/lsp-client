@@ -35,10 +35,11 @@ fn main() {
         "initialization_options": {},
         "capabilities": {},
     });
-
     lang_server.send_request("initialize", &init, |result| {
         println!("received response {:?}", result);
     });
+    let initialized = json!({});
+    lang_server.send_notification("initialized", &initialized);
     let shutdown = json!({});
     lang_server.send_request("shutdown", &shutdown, |result| {
         println!("received response {:?}", result);
