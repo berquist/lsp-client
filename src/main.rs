@@ -27,37 +27,31 @@ extern crate lsp_client;
 use lsp_client::start_language_server;
 use std::process::{Child, Command, Stdio};
 
+/// An example of how to interact with a language server.
 fn main() {
-    println!("starting main read loop");
     let (mut child, lang_server) = start_language_server(prepare_command());
-    // this init blob was copied from the atom client example here:
-    // https://github.com/jonathandturner/rls_vscode/blob/master/src/extension.ts
     let init = json!({
         "process_id": "Null",
-        "root_path": "/Users/cmyr/Dev/hacking/xi-mac/xi-editor", // a path to some rust project
         "initialization_options": {},
-        "capabilities": {
-            "documentSelector": ["rust"],
-            "synchronize": {
-                "configurationSection": "languageServerExample"
-            }
-        },
+        "capabilities": {},
     });
 
     lang_server.send_request("initialize", &init, |result| {
         println!("received response {:?}", result);
     });
+    let shutdown = json!({});
+    lang_server.send_request("shutdown", &shutdown, |result| {
+        println!("received response {:?}", result);
+    });
+    let exit = json!({});
+    lang_server.send_notification("exit", &exit);
     let _ = child.wait();
 }
 
 fn prepare_command() -> Child {
-    use std::env;
-    let rls_root = env::var("RLS_ROOT").expect("$RLS_ROOT must be set");
-    Command::new("cargo")
-        .current_dir(rls_root)
-        .args(["run", "--release"])
+    Command::new("rust-analyzer")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .expect("failed to start rls")
+        .expect("failed to start language server")
 }
