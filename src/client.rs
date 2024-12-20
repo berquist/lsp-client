@@ -27,8 +27,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use jsonrpc_lite::JsonRpc as JsonRPC;
-use serde_json;
-use serde_json::value::Value;
+use serde_json::{self, value::Value};
 
 use crate::parsing;
 
@@ -126,8 +125,7 @@ impl<W: Write> LanguageServer<W> {
 /// Access control and convenience wrapper around a shared LanguageServer instance.
 pub struct LanguageServerRef<W: Write>(Arc<Mutex<LanguageServer<W>>>);
 
-//FIXME: this is hacky, and prevents good error propogation,
-#[allow(dead_code)]
+//FIXME: this is hacky, and prevents good error propagation,
 fn number_from_id(id: Option<&Value>) -> usize {
     let id = id.expect("response missing id field");
     let id = match id {
@@ -160,32 +158,28 @@ impl<W: Write> LanguageServerRef<W> {
     fn handle_msg(&self, val: &Value) {
         // TODO avoid what looks like a round trip
         let parsed = val.to_string();
-        let mut parsed = JsonRPC::parse(&parsed).expect("problem creating JsonRpc instance");
+        let parsed = JsonRPC::parse(&parsed).expect("problem creating JsonRpc instance");
         match parsed {
             JsonRPC::Request(obj) => print_err!("client received unexpected request: {:?}", obj),
             JsonRPC::Notification(obj) => println!("recv notification: {:?}", obj),
-            JsonRPC::Success(ref mut obj) => {
-                println!("received success: {:?}", obj);
-                // TODO
-                // let mut inner = self.0.lock().unwrap();
-                // let obj = obj.as_object_mut().unwrap();
-                // let id = number_from_id(obj.get("id"));
-                // inner.handle_response(
-                //     id,
-                //     obj.remove("result")
-                //         .expect("response missing 'result' field"),
-                // );
+            JsonRPC::Success(_) => {
+                let mut inner = self.0.lock().unwrap();
+                let id = number_from_id(val.get("id"));
+                let _ = val.get("result").expect("response missing 'result' field");
+                // TODO clone
+                inner.handle_response(id, val.clone());
             }
-            JsonRPC::Error(ref mut obj) => {
-                print_err!("received error: {:?}", obj);
-                // TODO
-                // if obj.get("id").expect("error missing id field").is_null() {
+            JsonRPC::Error(_) => {
+                // TODO I'm not sure why this was this way before.
+                // if val.get("id").expect("error missing id field").is_null() {
                 //     let mut inner = self.0.lock().unwrap();
-                //     let obj = obj.as_object_mut().unwrap();
-                //     inner.handle_error(number_from_id(obj.get("id")), obj.remove("error").unwrap());
+                //     // TODO clone
+                //     inner.handle_error(number_from_id(val.get("id")), val.clone());
                 // } else {
                 //     print_err!("received error: {:?}", obj);
                 // }
+                let mut inner = self.0.lock().unwrap();
+                inner.handle_error(number_from_id(val.get("id")), val.clone());
             }
         }
     }
@@ -230,4 +224,65 @@ pub fn start_language_server(mut child: Child) -> (Child, LanguageServerRef<Chil
         });
     }
     (child, lang_server)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        process::{Child, Command, Stdio},
+        sync::mpsc,
+    };
+
+    use super::*;
+
+    fn prepare_command() -> Child {
+        Command::new("rust-analyzer")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("failed to start language server")
+    }
+
+    #[test]
+    fn test_start_language_server() {
+        let (mut child, lang_server) = start_language_server(prepare_command());
+
+        let (tx, rx) = mpsc::channel();
+        let init = json!({
+            "process_id": "Null",
+            "initialization_options": {},
+            "capabilities": {},
+        });
+        lang_server.send_request("initialize", &init, move |result| {
+            let _ = tx.send(result);
+        });
+        let initialize_result = rx.recv().expect("problem receiving from channel");
+        println!("received response {initialize_result:#?}");
+        assert!(initialize_result.is_ok());
+        assert!(initialize_result.as_ref().err().is_none());
+        let initialize_result = initialize_result.unwrap();
+        let error = initialize_result.get("error");
+        assert!(error.is_none());
+
+        let initialized = json!({});
+        lang_server.send_notification("initialized", &initialized);
+
+        let (tx, rx) = mpsc::channel();
+        let shutdown = json!(());
+        lang_server.send_request("shutdown", &shutdown, move |result| {
+            let _ = tx.send(result);
+        });
+        let shutdown_result = rx.recv().expect("problem receiving from channel");
+        println!("received response {shutdown_result:#?}");
+        assert!(shutdown_result.is_ok());
+        assert!(shutdown_result.as_ref().err().is_none());
+        let shutdown_result = shutdown_result.unwrap();
+        let error = shutdown_result.get("error");
+        assert!(error.is_none());
+
+        let exit = json!({});
+        lang_server.send_notification("exit", &exit);
+
+        let _ = child.wait();
+    }
 }
