@@ -149,30 +149,90 @@ mod tests {
 
     #[test]
     fn test_parse_header_malformed() {
+        let test_cases = [
+            ("", "malformed header: "),
+            ("Content-Length:132", "malformed header: Content-Length:132"),
+        ];
+        for (header, err_msg) in test_cases {
+            let parsed_header = parse_header(header);
+            assert_eq!(parsed_header.as_ref().ok(), None);
+            match parsed_header.as_ref().err().unwrap() {
+                ParseError::Unknown(s) => {
+                    assert_eq!(*s, err_msg.to_string())
+                }
+                default => panic!("incorrect ParseError variant: {:#?}", default),
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_header_unknown() {
         let header = "Hello: world";
         let parsed_header = parse_header(header);
         assert_eq!(parsed_header.as_ref().ok(), None);
         match parsed_header.as_ref().err().unwrap() {
             ParseError::Unknown(s) => assert_eq!(*s, "Unknown header: Hello: world".to_string()),
-            _ => panic!("incorrect ParseError variant"),
+            default => panic!("incorrect ParseError variant: {:#?}", default),
         }
     }
 
     #[test]
-    fn test_parse_message() {
+    fn test_parse_error() {
+        let header = "Content-Length: 132 hi";
+        let parsed_header = parse_header(header);
+        assert_eq!(parsed_header.as_ref().ok(), None);
+        match parsed_header.as_ref().err().unwrap() {
+            ParseError::ParseInt(s) => println!("{:#?}", s),
+            default => panic!("incorrect ParseError variant: {:#?}", default),
+        }
+    }
+
+    #[test]
+    fn test_read_message() {
         let inps = vec![
             "Content-Length: 18\n\r\n\r{\"name\": \"value\"}",
             "Content-length: 18\n\r\n\r{\"name\": \"value\"}",
             "Content-Length: 18\n\rContent-Type: utf-8\n\r\n\r{\"name\": \"value\"}",
+            "Content-Length: 18\n\rContent-Type: utf-8\n\r\n\r{\"name\": \"value\"}\n",
+            // FIXME this should fail due to invalid encoding
+            "Content-Length: 18\n\rContent-Type: ascii\n\r\n\r{\"name\": \"value\"}",
         ];
         for inp in inps {
             let mut reader = BufReader::new(inp.as_bytes());
             let result = match read_message(&mut reader) {
                 Ok(r) => r,
-                Err(e) => panic!("error: {:?}", e),
+                Err(e) => panic!("unexpected error: {:#?}", e),
             };
             let exp = json!({"name": "value"});
             assert_eq!(result, exp);
+        }
+    }
+
+    #[test]
+    fn test_read_message_missing_content_length() {
+        let test_cases = [
+            // Without the \n\r\n\r this leads to a failed header parse.
+            (
+                "\n\r\n\r{\"name\": \"value\"}",
+                "missing content-length header: \n",
+            ),
+            (
+                "Content-Type: utf-8\n\r\n\r{\"name\": \"value\"}",
+                "missing content-length header: \r\n",
+            ),
+        ];
+        for (inp, err_msg) in test_cases {
+            let mut reader = BufReader::new(inp.as_bytes());
+            let result = match read_message(&mut reader) {
+                Ok(r) => panic!("unexpected success: {:#?}", r),
+                Err(e) => match e {
+                    ParseError::Unknown(s) => {
+                        assert_eq!(s, err_msg.to_string())
+                    }
+                    default => panic!("incorrect ParseError variant: {:#?}", default),
+                },
+            };
+            assert_eq!(result, ());
         }
     }
 }
