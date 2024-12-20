@@ -148,6 +148,17 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_header_malformed() {
+        let header = "Hello: world";
+        let parsed_header = parse_header(header);
+        assert_eq!(parsed_header.as_ref().ok(), None);
+        match parsed_header.as_ref().err().unwrap() {
+            ParseError::Unknown(s) => assert_eq!(*s, "Unknown header: Hello: world".to_string()),
+            _ => panic!("incorrect ParseError variant"),
+        }
+    }
+
+    #[test]
     fn test_parse_message() {
         let inps = vec![
             "Content-Length: 18\n\r\n\r{\"name\": \"value\"}",
