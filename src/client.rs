@@ -285,4 +285,49 @@ mod tests {
 
         let _ = child.wait();
     }
+
+    #[test]
+    fn test_language_server_bad_arguments() {
+        let (mut child, lang_server) = start_language_server(prepare_command());
+
+        let (tx, rx) = mpsc::channel();
+        let init = json!({
+            "process_id": "Null",
+            "initialization_options": {},
+            "capabilities": {},
+        });
+        lang_server.send_request("initialize", &init, move |result| {
+            let _ = tx.send(result);
+        });
+        let initialize_result = rx.recv().expect("problem receiving from channel");
+        println!("received response {initialize_result:#?}");
+        assert!(initialize_result.is_ok());
+        assert!(initialize_result.as_ref().err().is_none());
+        let initialize_result = initialize_result.unwrap();
+        let error = initialize_result.get("error");
+        assert!(error.is_none());
+
+        let initialized = json!({});
+        lang_server.send_notification("initialized", &initialized);
+
+        let (tx, rx) = mpsc::channel();
+        // should be null, not a map, even an empty one
+        let shutdown = json!({});
+        lang_server.send_request("shutdown", &shutdown, move |result| {
+            let _ = tx.send(result);
+        });
+        let shutdown_result = rx.recv().expect("problem receiving from channel");
+        println!("received response {shutdown_result:#?}");
+        assert!(shutdown_result.is_err());
+        assert!(shutdown_result.as_ref().ok().is_none());
+        let shutdown_result = shutdown_result.err().unwrap();
+        let error = shutdown_result.get("error");
+        assert!(error.is_some());
+
+        // we can still exist normally
+        let exit = json!({});
+        lang_server.send_notification("exit", &exit);
+
+        let _ = child.wait();
+    }
 }
