@@ -5,7 +5,7 @@ ci:
     - cargo-fmt
     - cargo-check
     - cargo-clippy
-    - cargo-test
+    # - cargo-test
 repos:
   - repo: meta
     hooks:
