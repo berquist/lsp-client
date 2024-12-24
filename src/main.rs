@@ -36,13 +36,13 @@ fn main() {
         "capabilities": {},
     });
     lang_server.send_request("initialize", &init, |result| {
-        println!("received response {:?}", result);
+        println!("received response {:#?}", result);
     });
     let initialized = json!({});
     lang_server.send_notification("initialized", &initialized);
-    let shutdown = json!({});
+    let shutdown = json!(());
     lang_server.send_request("shutdown", &shutdown, |result| {
-        println!("received response {:?}", result);
+        println!("received response {:#?}", result);
     });
     let exit = json!({});
     lang_server.send_notification("exit", &exit);

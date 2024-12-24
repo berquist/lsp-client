@@ -1,0 +1,5 @@
+[test_config]
+engine = "Llvm"
+follow-exec = true
+skip-clean = true
+target-dir = "target/tarpaulin"

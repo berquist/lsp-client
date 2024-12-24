@@ -5,7 +5,7 @@ ci:
     - cargo-fmt
     - cargo-check
     - cargo-clippy
-    - cargo-test
+    # - cargo-test
 repos:
   - repo: meta
     hooks:
@@ -27,4 +27,5 @@ repos:
       - id: cargo-fmt
       - id: cargo-check
       - id: cargo-clippy
-      - id: cargo-test
+      # Not a hard requirement for committing
+      # - id: cargo-test
