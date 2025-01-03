@@ -93,10 +93,16 @@ pub fn read_message<B: BufRead>(reader: &mut B) -> Result<Value, ParseError> {
     let mut buffer = String::new();
     let mut content_length: Option<usize> = None;
 
+    // let mut vbuf = vec![];
+    // reader.read_to_end(&mut vbuf)?;
+    // let buf = String::from_utf8(vbuf)?;
+    // println!("buffer: {buf}");
+
     // read in headers.
     loop {
         buffer.clear();
         reader.read_line(&mut buffer)?;
+        println!("buffer: {buffer}");
         match &buffer {
             s if s.trim().is_empty() => break, // empty line is end of headers
             s => {
