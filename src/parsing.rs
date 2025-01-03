@@ -46,6 +46,7 @@ pub enum ParseError {
     Io(io::Error),
     ParseInt(std::num::ParseIntError),
     Utf8(std::string::FromUtf8Error),
+    Encoding(String),
     Json(serde_json::Error),
     Unknown(String),
 }
@@ -127,7 +128,20 @@ fn parse_header(s: &str) -> Result<LspHeader, ParseError> {
         return Err(ParseError::Unknown(format!("malformed header: {}", s)));
     }
     match split[0].as_ref() {
-        HEADER_CONTENT_TYPE => Ok(LspHeader::ContentType),
+        HEADER_CONTENT_TYPE => {
+            let encoding = split[1].to_lowercase();
+            let is_valid_encoding = ["utf-8", "utf8"]
+                .iter()
+                .any(|valid_encoding| *valid_encoding == encoding);
+            if is_valid_encoding {
+                Ok(LspHeader::ContentType)
+            } else {
+                Err(ParseError::Encoding(format!(
+                    "Invalid encoding: {}",
+                    split[1]
+                )))
+            }
+        }
         HEADER_CONTENT_LENGTH => Ok(LspHeader::ContentLength(split[1].parse()?)),
         _ => Err(ParseError::Unknown(format!("Unknown header: {}", s))),
     }
@@ -139,12 +153,32 @@ mod tests {
     use std::io::BufReader;
 
     #[test]
-    fn test_parse_header() {
+    fn test_parse_header_content_length() {
         let header = "Content-Length: 132";
         assert_eq!(
             parse_header(header).ok(),
             Some(LspHeader::ContentLength(132))
         );
+    }
+
+    #[test]
+    fn test_parse_header_content_type() {
+        let header = "Content-Type: utf-8";
+        let parsed = parse_header(header);
+        assert_eq!(parsed.ok(), Some(LspHeader::ContentType));
+
+        // For backwards compatibility; see
+        // https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#contentPart
+        let header = "Content-Type: utf8";
+        let parsed = parse_header(header);
+        assert_eq!(parsed.ok(), Some(LspHeader::ContentType));
+    }
+
+    #[test]
+    fn test_parse_header_invalid_content_type() {
+        let header = "Content-Type: ascii";
+        let parsed = parse_header(header);
+        assert!(parsed.is_err());
     }
 
     #[test]
@@ -194,8 +228,6 @@ mod tests {
             "Content-length: 18\n\r\n\r{\"name\": \"value\"}",
             "Content-Length: 18\n\rContent-Type: utf-8\n\r\n\r{\"name\": \"value\"}",
             "Content-Length: 18\n\rContent-Type: utf-8\n\r\n\r{\"name\": \"value\"}\n",
-            // FIXME this should fail due to invalid encoding
-            "Content-Length: 18\n\rContent-Type: ascii\n\r\n\r{\"name\": \"value\"}",
         ];
         for inp in inps {
             let mut reader = BufReader::new(inp.as_bytes());
@@ -205,6 +237,33 @@ mod tests {
             };
             let exp = json!({"name": "value"});
             assert_eq!(result, exp);
+        }
+    }
+
+    #[test]
+    fn test_read_message_invalid_content_type() {
+        let test_cases = [
+            (
+                "Content-Length: 18\n\rContent-Type: ascii\n\r\n\r{\"name\": \"value\"}",
+                "Invalid encoding: ascii",
+            ),
+            (
+                "Content-Length: 18\n\rContent-Type: utf-9\n\r\n\r{\"name\": \"hello\"}",
+                "Invalid encoding: utf-9",
+            ),
+        ];
+        for (inp, err_msg) in test_cases {
+            let mut reader = BufReader::new(inp.as_bytes());
+            let result = match read_message(&mut reader) {
+                Ok(r) => panic!("unexpected success: {:#?}", r),
+                Err(e) => match e {
+                    ParseError::Encoding(s) => {
+                        assert_eq!(s, err_msg.to_string())
+                    }
+                    default => panic!("incorrect ParseError variant: {:#?}", default),
+                },
+            };
+            assert_eq!(result, ());
         }
     }
 
