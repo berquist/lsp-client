@@ -49,6 +49,7 @@ pub enum ParseError {
     Encoding(String),
     Json(serde_json::Error),
     Unknown(String),
+    Empty,
 }
 
 impl From<io::Error> for ParseError {
@@ -97,9 +98,14 @@ pub fn read_message<B: BufRead>(reader: &mut B) -> Result<Value, ParseError> {
     // read in headers.
     loop {
         buffer.clear();
-        reader.read_line(&mut buffer)?;
+        let num_bytes = reader.read_line(&mut buffer)?;
+        if num_bytes == 0 {
+            return Err(ParseError::Empty);
+        }
+        // assert!(buffer.ends_with("\r\n"));
         match &buffer {
             s if s.trim().is_empty() => break, // empty line is end of headers
+            // s if s == "\r\n" => break, // empty line is end of headers
             s => {
                 match parse_header(s)? {
                     LspHeader::ContentLength(len) => content_length = Some(len),
@@ -115,7 +121,7 @@ pub fn read_message<B: BufRead>(reader: &mut B) -> Result<Value, ParseError> {
     let mut body_buffer = vec![0; content_length];
     reader.read_exact(&mut body_buffer)?;
     let body = String::from_utf8(body_buffer)?;
-    Ok(serde_json::from_str::<Value>(&body)?)
+    Ok(serde_json::from_str(&body)?)
 }
 
 const HEADER_CONTENT_LENGTH: &str = "content-length";

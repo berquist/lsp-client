@@ -29,7 +29,7 @@ use std::thread;
 use jsonrpc_lite::JsonRpc as JsonRPC;
 use serde_json::{self, value::Value};
 
-use crate::parsing;
+use crate::parsing::{self, ParseError};
 
 // this to get around some type system pain related to callbacks. See:
 // https://doc.rust-lang.org/beta/book/trait-objects.html,
@@ -218,7 +218,8 @@ pub fn start_language_server(mut child: Child) -> (Child, LanguageServerRef<Chil
             loop {
                 match parsing::read_message(&mut reader) {
                     Ok(ref val) => lang_server.handle_msg(val),
-                    Err(err) => println!("parse error: {:?}", err),
+                    Err(ParseError::Empty) => (),
+                    Err(err) => eprintln!("parse error: {:?}", err),
                 };
             }
         });
