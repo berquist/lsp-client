@@ -28,6 +28,7 @@ use lsp_client::start_language_server;
 use std::process::{Child, Command, Stdio};
 
 /// An example of how to interact with a language server.
+#[cfg(not(tarpaulin_include))]
 fn main() {
     let (mut child, lang_server) = start_language_server(prepare_command());
     let init = json!({
@@ -49,6 +50,7 @@ fn main() {
     let _ = child.wait();
 }
 
+#[cfg(not(tarpaulin_include))]
 fn prepare_command() -> Child {
     Command::new("rust-analyzer")
         .stdin(Stdio::piped())
