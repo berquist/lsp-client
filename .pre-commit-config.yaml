@@ -22,7 +22,7 @@ repos:
       - id: fix-byte-order-marker
       - id: trailing-whitespace
   - repo: https://github.com/berquist/pre-commit-rust
-    rev: v2.1.1
+    rev: v2.1.2
     hooks:
       - id: cargo-fmt
       - id: cargo-check
